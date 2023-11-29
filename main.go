@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/mousany/gophinator/container"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -13,19 +15,12 @@ func main() {
 		Version: "v0.1.0",
 		Usage:   "A minimal container runtime implemented in Go",
 
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:    "debug",
-				Aliases: []string{"d"},
-				Usage:   "enable debug mode",
-			},
-		},
 		Commands: []*cli.Command{
 			{
 				Name:      "run",
 				Aliases:   []string{"r"},
 				Usage:     "run a command in a new container",
-				ArgsUsage: `COMMAND [ARG...]`,
+				ArgsUsage: `COMMAND [-- ARGUMENTS]`,
 				Flags: []cli.Flag{
 					&cli.UintFlag{
 						Name:    "uid",
@@ -43,7 +38,24 @@ func main() {
 						logrus.SetLevel(logrus.DebugLevel)
 					}
 
-					return nil
+					if c.NArg() < 1 {
+						fmt.Print("Incorrect Usage: command needs an argument: run\n\n")
+						cli.ShowSubcommandHelpAndExit(c, 1)
+					}
+
+					if c.Args().Len() > 1 && c.Args().Get(1) != "--" {
+						fmt.Printf("Incorrect Usage: arguments must be preceded by '--': %s\n\n", c.Args().Get(1))
+						cli.ShowSubcommandHelpAndExit(c, 1)
+					}
+
+					args := []string{}
+					for i := 2; i < c.Args().Len(); i++ {
+						args = append(args, c.Args().Get(i))
+					}
+
+					con := container.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
+
+					return con.Run()
 				},
 			},
 		},
