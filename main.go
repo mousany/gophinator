@@ -15,6 +15,13 @@ func main() {
 		Version: "v0.1.0",
 		Usage:   "A minimal container runtime implemented in Go",
 
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "debug",
+				Aliases: []string{"d"},
+				Usage:   "enable debug logging",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:      "run",
