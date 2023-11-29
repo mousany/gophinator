@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mousany/gophinator/container"
+	"github.com/mousany/gophinator/runtime"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
@@ -60,7 +60,7 @@ func main() {
 						args = append(args, c.Args().Get(i))
 					}
 
-					con := container.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
+					con := runtime.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
 
 					return con.Run()
 				},
