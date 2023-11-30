@@ -9,11 +9,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const minimalKernelVersion = 4.8
+
 type Runtime struct {
-	command string
-	args    []string
-	uid     uint
-	volume  string
+	command  string
+	args     []string
+	uid      uint
+	volume   string
+	hostname string
 }
 
 // New creates a new container with the given command and arguments.
@@ -34,21 +37,28 @@ func New(command string, args []string, uid uint, volume string) (*Runtime, erro
 	if err != nil {
 		return nil, err
 	}
-	if major < 4.8 {
+	if major < minimalKernelVersion {
 		return nil, ErrUnsupportedVersion
 	}
 
+	hostname, err := newHostname()
+	if err != nil {
+		return nil, err
+	}
+	logrus.Debugf("Using hostname: %s", hostname)
+
 	return &Runtime{
-		command: command,
-		args:    args,
-		uid:     uid,
-		volume:  volume,
+		command:  command,
+		args:     args,
+		uid:      uid,
+		volume:   volume,
+		hostname: hostname,
 	}, nil
 }
 
 // Run executes the container's command with the given arguments.
 func (r *Runtime) Run() error {
-	sockets, err := socketpair()
+	sockets, err := newSocketPair()
 	if err != nil {
 		return err
 	}
@@ -59,13 +69,13 @@ func (r *Runtime) Run() error {
 		}
 	}()
 
-	pid, err := spawn(r, sockets[1])
+	pid, err := spawnChild(r, sockets[1])
 	if err != nil {
 		return err
 	}
 	logrus.Debugf("Spawned container with PID %d", pid)
 
-	stat, err := wait(pid)
+	stat, err := wait4Child(pid)
 	if err != nil {
 		return err
 	}
@@ -75,6 +85,6 @@ func (r *Runtime) Run() error {
 }
 
 // String returns a string representation of the container.
-func (c *Runtime) String() string {
-	return fmt.Sprintf("%s %s", c.command, strings.Join(c.args, " "))
+func (r *Runtime) String() string {
+	return fmt.Sprintf("%s %s", r.command, strings.Join(r.args, " "))
 }

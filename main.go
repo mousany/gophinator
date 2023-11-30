@@ -46,11 +46,13 @@ func main() {
 					}
 
 					if c.NArg() < 1 {
-						fmt.Print("Incorrect Usage: command needs an argument: run\n\n")
+						fmt.Fprintln(os.Stderr, "Incorrect Usage: command needs an argument: run")
+						fmt.Fprintln(os.Stderr)
 						cli.ShowSubcommandHelpAndExit(c, 1)
 					}
 					if c.Args().Len() > 1 && c.Args().Get(1) != "--" {
-						fmt.Printf("Incorrect Usage: arguments must be preceded by '--': %s\n\n", c.Args().Get(1))
+						fmt.Fprintf(os.Stderr, "Incorrect Usage: arguments must be preceded by '--': %s", c.Args().Get(1))
+						fmt.Fprintln(os.Stderr)
 						cli.ShowSubcommandHelpAndExit(c, 1)
 					}
 					args := []string{}
