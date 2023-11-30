@@ -49,19 +49,19 @@ func main() {
 						fmt.Print("Incorrect Usage: command needs an argument: run\n\n")
 						cli.ShowSubcommandHelpAndExit(c, 1)
 					}
-
 					if c.Args().Len() > 1 && c.Args().Get(1) != "--" {
 						fmt.Printf("Incorrect Usage: arguments must be preceded by '--': %s\n\n", c.Args().Get(1))
 						cli.ShowSubcommandHelpAndExit(c, 1)
 					}
-
 					args := []string{}
 					for i := 2; i < c.Args().Len(); i++ {
 						args = append(args, c.Args().Get(i))
 					}
 
-					con := runtime.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
-
+					con, err := runtime.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
+					if err != nil {
+						return err
+					}
 					return con.Run()
 				},
 			},
