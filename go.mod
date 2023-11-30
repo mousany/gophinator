@@ -4,6 +4,7 @@ go 1.21.4
 
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
+	github.com/google/uuid v1.4.0 // indirect
 	github.com/msaf1980/go-uname v0.0.0-20210526135747-16d3ea6157f4 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
