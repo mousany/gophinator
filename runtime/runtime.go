@@ -3,7 +3,6 @@ package runtime
 import (
 	"fmt"
 	"strings"
-	"syscall"
 
 	"github.com/msaf1980/go-uname"
 	"github.com/sirupsen/logrus"
@@ -63,11 +62,7 @@ func (r *Runtime) Run() error {
 		return err
 	}
 
-	defer func() {
-		for _, fd := range sockets {
-			syscall.Close(fd)
-		}
-	}()
+	defer closeSocketPair(sockets)
 
 	pid, err := spawnChild(r, sockets[1])
 	if err != nil {

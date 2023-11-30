@@ -21,9 +21,21 @@ func newSocketPair() ([2]int, error) {
 	return sockets, nil
 }
 
+// closeSocketPair closes a pair of connected sockets.
+func closeSocketPair(sockets [2]int) {
+	for _, fd := range sockets {
+		syscall.Close(fd)
+	}
+}
+
 // childDaemon is the main loop for the container.
 func childDaemon(r *Runtime, _ int) int {
 	logrus.Infof("Starting container with command: %s %s", r.command, strings.Join(r.args, " "))
+	err := syscall.Sethostname([]byte(r.hostname))
+	if err != nil {
+		logrus.Errorf("Failed to set hostname: %s", err)
+		return -1
+	}
 	return 0
 }
 
