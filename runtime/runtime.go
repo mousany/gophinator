@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/msaf1980/go-uname"
 	"github.com/sirupsen/logrus"
 )
@@ -16,6 +17,7 @@ type Runtime struct {
 	uid      uint
 	volume   string
 	hostname string
+	uuid     string
 }
 
 // New creates a new container with the given command and arguments.
@@ -46,12 +48,15 @@ func New(command string, args []string, uid uint, volume string) (*Runtime, erro
 	}
 	logrus.Debugf("Using hostname: %s", hostname)
 
+	uuid := uuid.NewString()
+
 	return &Runtime{
 		command:  command,
 		args:     args,
 		uid:      uid,
 		volume:   volume,
 		hostname: hostname,
+		uuid:     uuid,
 	}, nil
 }
 
@@ -62,14 +67,14 @@ func (r *Runtime) Run() error {
 		return err
 	}
 	logrus.Debugf("Creating socket pair: %d %d", sockets[0], sockets[1])
-	defer closeSocketPair(sockets)
+	defer cleanupSocketPair(sockets)
 
 	pid, err := spawnChild(r, sockets[1])
 	if err != nil {
 		return err
 	}
 	logrus.Debugf("Spawning container with PID %d", pid)
-	defer unmountFilesys(r.volume)
+	defer cleanupFilesys(r.uuid)
 
 	stat, err := wait4Child(pid)
 	if err != nil {

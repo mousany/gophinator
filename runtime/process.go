@@ -6,7 +6,6 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,69 +21,11 @@ func newSocketPair() ([2]int, error) {
 	return sockets, nil
 }
 
-// closeSocketPair closes a pair of connected sockets.
-func closeSocketPair(sockets [2]int) {
+// cleanupSocketPair closes a pair of connected sockets.
+func cleanupSocketPair(sockets [2]int) {
 	for _, fd := range sockets {
 		syscall.Close(fd)
 	}
-}
-
-// mountFilesys mounts the filesystem.
-func mountFilesys(volume string) error {
-	const (
-		filesysPrefix  = "/tmp/gophinator."
-		filesysOldRoot = "/oldroot."
-	)
-
-	root := filesysPrefix + uuid.NewString()
-	err := os.MkdirAll(root, 0755)
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Creating root directory %s", root)
-
-	err = syscall.Mount(volume, root, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Mounting volume %s to %s", volume, root)
-
-	uid := uuid.NewString()
-	oldRoot := root + filesysOldRoot + uid
-	err = os.MkdirAll(oldRoot, 0755)
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Creating old root directory %s", oldRoot)
-
-	err = syscall.PivotRoot(root, oldRoot)
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Pivoting root to %s", root)
-
-	err = os.Chdir("/")
-	if err != nil {
-		return err
-	}
-	err = syscall.Unmount(filesysOldRoot+uid, syscall.MNT_DETACH)
-	if err != nil {
-		return err
-	}
-	err = os.RemoveAll(filesysOldRoot + uid)
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("Unmounting old root")
-
-	logrus.Infof("Mount %s => %s => /", volume, root)
-
-	return nil
-}
-
-// unmountFilesys unmounts the filesystem.
-func unmountFilesys(volume string) {
-
 }
 
 // childDaemon is the main loop for the container.
@@ -95,7 +36,7 @@ func childDaemon(r *Runtime, _ int) int {
 		logrus.Errorf("Fail to set hostname: %s", err)
 		return -1
 	}
-	err = mountFilesys(r.volume)
+	err = mountFilesys(r.uuid, r.volume)
 	if err != nil {
 		logrus.Errorf("Fail to mount filesystem: %s", err)
 		return -1
