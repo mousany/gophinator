@@ -24,7 +24,7 @@ func New(command string, args []string, uid uint, volume string) (*Runtime, erro
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debugf("Detected OS: %s %s %s %s", u.Sysname(), u.Nodename(), u.KernelRelease(), u.Machine())
+	logrus.Debugf("Detecting OS: %s %s %s %s", u.Sysname(), u.Nodename(), u.KernelRelease(), u.Machine())
 	if u.Machine() != "x86_64" {
 		return nil, ErrUnsupportedArch
 	}
@@ -61,14 +61,15 @@ func (r *Runtime) Run() error {
 	if err != nil {
 		return err
 	}
-
+	logrus.Debugf("Creating socket pair: %d %d", sockets[0], sockets[1])
 	defer closeSocketPair(sockets)
 
 	pid, err := spawnChild(r, sockets[1])
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Spawned container with PID %d", pid)
+	logrus.Debugf("Spawning container with PID %d", pid)
+	defer unmountFilesys(r.volume)
 
 	stat, err := wait4Child(pid)
 	if err != nil {
