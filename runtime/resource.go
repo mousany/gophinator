@@ -65,3 +65,35 @@ func mountFilesys(rootUUID string, volume string) error {
 func cleanupFilesys(rootUUID string) {
 	os.RemoveAll(filesysPrefix + rootUUID)
 }
+
+const (
+	setupNamespaceFail    = 0x0
+	setupNamespaceSuccess = 0x1
+)
+
+// setupNamespace sets up the namespaces.
+func setupNamespace(fd int) error {
+	err := syscall.Unshare(syscall.CLONE_NEWUSER)
+	if err != nil {
+		logrus.Debugf("Unsharing user namespace is not supported: %s", err)
+		err = syscall.Sendto(fd, []byte{setupNamespaceFail}, 0, nil)
+		if err != nil {
+			return err
+		}
+	} else {
+		logrus.Debugf("Unsharing user namespace successfully")
+		err = syscall.Sendto(fd, []byte{setupNamespaceSuccess}, 0, nil)
+		if err != nil {
+			return err
+		}
+	}
+
+	recv := make([]byte, 1)
+	_, _, err = syscall.Recvfrom(fd, recv, 0)
+	if err != nil {
+		return err
+	}
+	logrus.Debug("Mapping UID/GID from parent successfully")
+
+	return nil
+}

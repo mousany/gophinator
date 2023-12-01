@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"strings"
+	"syscall"
 
 	"github.com/google/uuid"
 	"github.com/msaf1980/go-uname"
@@ -76,7 +77,22 @@ func (r *Runtime) Run() error {
 	logrus.Debugf("Spawning container with PID %d", pid)
 	defer cleanupFilesys(r.uuid)
 
-	stat, err := wait4Child(pid)
+	recv := make([]byte, 1)
+	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
+	if err != nil {
+		return err
+	}
+	if recv[0] == setupNamespaceFail {
+		logrus.Debugf("Unsharing user namespace from child failed")
+	} else {
+		logrus.Debugf("Unsharing user namespace from child successfully")
+	}
+	err = syscall.Sendto(sockets[0], []byte{0x0}, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	stat, err := waitChild(pid)
 	if err != nil {
 		return err
 	}

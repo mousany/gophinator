@@ -29,7 +29,7 @@ func cleanupSocketPair(sockets [2]int) {
 }
 
 // childDaemon is the main loop for the container.
-func childDaemon(r *Runtime, _ int) int {
+func childDaemon(r *Runtime, fd int) int {
 	logrus.Infof("Starting container with command: %s %s", r.command, strings.Join(r.args, " "))
 	err := syscall.Sethostname([]byte(r.hostname))
 	if err != nil {
@@ -40,6 +40,17 @@ func childDaemon(r *Runtime, _ int) int {
 	if err != nil {
 		logrus.Errorf("Fail to mount filesystem: %s", err)
 		return -1
+	}
+
+	err = setupNamespace(fd)
+	if err != nil {
+		logrus.Errorf("Fail to setup namespaces: %s", err)
+		return -1
+	}
+
+	err = syscall.Close(fd)
+	if err != nil {
+		logrus.Errorf("Fail to close socket: %d", fd)
 	}
 
 	return 0
@@ -68,8 +79,8 @@ func spawnChild(r *Runtime, fd int) (uintptr, error) {
 	return r1, nil
 }
 
-// wait4Child waits for the child process to exit.
-func wait4Child(pid uintptr) (int, error) {
+// waitChild waits for the child process to exit.
+func waitChild(pid uintptr) (int, error) {
 	var stat syscall.WaitStatus
 	_, _, err := syscall.Syscall(syscall.SYS_WAIT4, pid, uintptr(unsafe.Pointer(&stat)), 0)
 	if err != 0 {
