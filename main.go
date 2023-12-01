@@ -29,7 +29,7 @@ func main() {
 				Usage:     "run a command in a new container",
 				ArgsUsage: `COMMAND [-- ARGUMENTS]`,
 				Flags: []cli.Flag{
-					&cli.UintFlag{
+					&cli.IntFlag{
 						Name:    "uid",
 						Aliases: []string{"u"},
 						Usage:   "create the container with the specified `UID`",
@@ -60,7 +60,7 @@ func main() {
 						args = append(args, c.Args().Get(i))
 					}
 
-					con, err := runtime.New(c.Args().First(), args, c.Uint("uid"), c.String("volume"))
+					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("volume"))
 					if err != nil {
 						return err
 					}

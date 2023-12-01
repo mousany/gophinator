@@ -47,6 +47,12 @@ func childDaemon(r *Runtime, fd int) int {
 		logrus.Errorf("Fail to setup namespaces: %s", err)
 		return -1
 	}
+	err = switchNamespace(r.uid)
+	if err != nil {
+		logrus.Errorf("Fail to switch namespaces: %s", err)
+		return -1
+	}
+	logrus.Infof("Setup namespace with UID %d", r.uid)
 
 	err = syscall.Close(fd)
 	if err != nil {

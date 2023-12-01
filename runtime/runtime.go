@@ -15,14 +15,14 @@ const minimalKernelVersion = 4.8
 type Runtime struct {
 	command  string
 	args     []string
-	uid      uint
+	uid      int
 	volume   string
 	hostname string
 	uuid     string
 }
 
 // New creates a new container with the given command and arguments.
-func New(command string, args []string, uid uint, volume string) (*Runtime, error) {
+func New(command string, args []string, uid int, volume string) (*Runtime, error) {
 	u, err := uname.New()
 	if err != nil {
 		return nil, err
@@ -86,6 +86,10 @@ func (r *Runtime) Run() error {
 		logrus.Debugf("Unsharing user namespace from child failed")
 	} else {
 		logrus.Debugf("Unsharing user namespace from child successfully")
+		err = mapNamespace(pid)
+		if err != nil {
+			return err
+		}
 	}
 	err = syscall.Sendto(sockets[0], []byte{0x0}, 0, nil)
 	if err != nil {

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -95,5 +96,55 @@ func setupNamespace(fd int) error {
 	}
 	logrus.Debug("Mapping UID/GID from parent successfully")
 
+	return nil
+}
+
+const (
+	mapNamespaceOffset = 10000
+	mapNamespaceLength = 2000
+)
+
+// mapNamespace maps the namespaces.
+func mapNamespace(pid uintptr) error {
+	proc := fmt.Sprintf("/proc/%d", pid)
+	for _, file := range []string{"/uid_map", "/gid_map"} {
+		fd, err := syscall.Creat(proc+file, 0755)
+		if err != nil {
+			return err
+		}
+
+		mapEntry := fmt.Sprintf("%d %d %d", 0, mapNamespaceOffset, mapNamespaceLength)
+		_, err = syscall.Write(fd, []byte(mapEntry))
+		if err != nil {
+			return err
+		}
+
+		err = syscall.Close(fd)
+		if err != nil {
+			return err
+		}
+	}
+
+	logrus.Debugf("Mapping UID/GID successfully")
+
+	return nil
+}
+
+// switchNamespace switches the namespaces.
+func switchNamespace(uid int) error {
+	err := syscall.Setgroups([]int{uid})
+	if err != nil {
+		return err
+	}
+	err = syscall.Setregid(uid, uid)
+	if err != nil {
+		return err
+	}
+	err = syscall.Setreuid(uid, uid)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Switching UID/GID to %d successfully", uid)
 	return nil
 }
