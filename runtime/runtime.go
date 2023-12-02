@@ -82,7 +82,7 @@ func (r *Runtime) Run() error {
 	if err != nil {
 		return err
 	}
-	if recv[0] == setupNamespaceFail {
+	if recv[0] == namespaceSetupFail {
 		logrus.Debugf("Unsharing user namespace from child failed")
 	} else {
 		logrus.Debugf("Unsharing user namespace from child successfully")

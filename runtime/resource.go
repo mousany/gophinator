@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/google/uuid"
+	seccomp "github.com/seccomp/libseccomp-golang"
 	"github.com/sirupsen/logrus"
 )
 
@@ -68,8 +69,8 @@ func cleanupFilesys(rootUUID string) {
 }
 
 const (
-	setupNamespaceFail    = 0x0
-	setupNamespaceSuccess = 0x1
+	namespaceSetupFail    = 0x0
+	namespaceSetupSuccess = 0x1
 )
 
 // setupNamespace sets up the namespaces.
@@ -77,13 +78,13 @@ func setupNamespace(fd int) error {
 	err := syscall.Unshare(syscall.CLONE_NEWUSER)
 	if err != nil {
 		logrus.Debugf("Unsharing user namespace is not supported: %s", err)
-		err = syscall.Sendto(fd, []byte{setupNamespaceFail}, 0, nil)
+		err = syscall.Sendto(fd, []byte{namespaceSetupFail}, 0, nil)
 		if err != nil {
 			return err
 		}
 	} else {
 		logrus.Debugf("Unsharing user namespace successfully")
-		err = syscall.Sendto(fd, []byte{setupNamespaceSuccess}, 0, nil)
+		err = syscall.Sendto(fd, []byte{namespaceSetupSuccess}, 0, nil)
 		if err != nil {
 			return err
 		}
@@ -100,8 +101,8 @@ func setupNamespace(fd int) error {
 }
 
 const (
-	mapNamespaceOffset = 10000
-	mapNamespaceLength = 2000
+	namespaceMapOffset = 10000
+	namespaceMapLength = 2000
 )
 
 // mapNamespace maps the namespaces.
@@ -113,7 +114,7 @@ func mapNamespace(pid uintptr) error {
 			return err
 		}
 
-		mapEntry := fmt.Sprintf("%d %d %d", 0, mapNamespaceOffset, mapNamespaceLength)
+		mapEntry := fmt.Sprintf("%d %d %d", 0, namespaceMapOffset, namespaceMapLength)
 		_, err = syscall.Write(fd, []byte(mapEntry))
 		if err != nil {
 			return err
@@ -147,4 +148,68 @@ func switchNamespace(uid int) error {
 
 	logrus.Debugf("Switching UID/GID to %d successfully", uid)
 	return nil
+}
+
+// setupSyscall sets up the seccomp syscall.
+func setupSyscall() error {
+	filter, err := seccomp.NewFilter(seccomp.ActAllow)
+	if err != nil {
+		return err
+	}
+
+	refusedSyscalls := &[]seccomp.ScmpSyscall{
+		seccomp.ScmpSyscall(syscall.SYS_KEYCTL),
+		seccomp.ScmpSyscall(syscall.SYS_ADD_KEY),
+		seccomp.ScmpSyscall(syscall.SYS_REQUEST_KEY),
+		seccomp.ScmpSyscall(syscall.SYS_MBIND),
+		seccomp.ScmpSyscall(syscall.SYS_MIGRATE_PAGES),
+		seccomp.ScmpSyscall(syscall.SYS_MOVE_PAGES),
+		seccomp.ScmpSyscall(syscall.SYS_SET_MEMPOLICY),
+		// seccomp.ScmpSyscall(syscall.SYS_USERFAULTFD),
+		seccomp.ScmpSyscall(syscall.SYS_PERF_EVENT_OPEN),
+	}
+	for _, sc := range *refusedSyscalls {
+		err = filter.AddRule(sc, seccomp.ActErrno.SetReturnCode(int16(syscall.EPERM)))
+		if err != nil {
+			return err
+		}
+	}
+
+	refusedCondSyscalls := &[]struct {
+		seccomp.ScmpSyscall
+		uint
+		uint64
+	}{
+		{seccomp.ScmpSyscall(syscall.SYS_CHMOD), 1, syscall.S_ISUID},
+		{seccomp.ScmpSyscall(syscall.SYS_CHMOD), 1, syscall.S_ISGID},
+		{seccomp.ScmpSyscall(syscall.SYS_FCHMOD), 1, syscall.S_ISUID},
+		{seccomp.ScmpSyscall(syscall.SYS_FCHMOD), 1, syscall.S_ISGID},
+		{seccomp.ScmpSyscall(syscall.SYS_FCHMODAT), 2, syscall.S_ISUID},
+		{seccomp.ScmpSyscall(syscall.SYS_FCHMODAT), 2, syscall.S_ISGID},
+		{seccomp.ScmpSyscall(syscall.SYS_UNSHARE), 0, syscall.CLONE_NEWUSER},
+		{seccomp.ScmpSyscall(syscall.SYS_CLONE), 0, syscall.CLONE_NEWUSER},
+		{seccomp.ScmpSyscall(syscall.SYS_IOCTL), 1, syscall.TIOCSTI},
+	}
+	for _, sc := range *refusedCondSyscalls {
+		cond, err := seccomp.MakeCondition(
+			sc.uint,
+			seccomp.CompareMaskedEqual,
+			sc.uint64,
+			sc.uint64,
+		)
+		if err != nil {
+			return err
+		}
+		err = filter.AddRuleConditional(
+			sc.ScmpSyscall,
+			seccomp.ActErrno.SetReturnCode(int16(syscall.EPERM)),
+			[]seccomp.ScmpCondition{cond},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = filter.Load()
+	return err
 }

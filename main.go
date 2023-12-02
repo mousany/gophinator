@@ -62,9 +62,16 @@ func main() {
 
 					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("volume"))
 					if err != nil {
+						logrus.Errorf("Fail to create container: %s", err)
 						return err
 					}
-					return con.Run()
+
+					err = con.Run()
+					if err != nil {
+						logrus.Errorf("Fail to run container: %s", err)
+					}
+
+					return err
 				},
 			},
 		},
