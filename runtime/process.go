@@ -65,6 +65,13 @@ func childDaemon(r *Runtime, fd int) int {
 	}
 	logrus.Infof("Setup syscall successfully")
 
+	argv := append([]string{r.command}, r.args...)
+	err = syscall.Exec(r.command, argv, os.Environ())
+	if err != nil {
+		logrus.Errorf("Fail to exec command: %s", err)
+		return -1
+	}
+
 	return 0
 }
 

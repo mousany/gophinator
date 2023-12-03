@@ -87,12 +87,12 @@ func (r *Runtime) Run() (int, error) {
 		defer cleanupFilesys(r.uuid)
 	}
 
-	control, err := setupCgroup(r.hostname, pid)
-	if err != nil {
-		return 0, err
-	}
-	logrus.Debugf("Setting up cgroup: %s", control)
-	defer cleanupCgroup(control)
+	// control, err := setupCgroup(r.hostname, pid)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// logrus.Debugf("Setting up cgroup: %s", control)
+	// defer cleanupCgroup(control)
 
 	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
 	if err != nil {
