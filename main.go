@@ -66,9 +66,11 @@ func main() {
 						return err
 					}
 
-					err = con.Run()
+					stat, err := con.Run()
 					if err != nil {
 						logrus.Errorf("Fail to run container: %s", err)
+					} else {
+						logrus.Infof("Container exited with status %d", stat)
 					}
 
 					return err

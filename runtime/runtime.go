@@ -62,25 +62,41 @@ func New(command string, args []string, uid int, volume string) (*Runtime, error
 }
 
 // Run executes the container's command with the given arguments.
-func (r *Runtime) Run() error {
+func (r *Runtime) Run() (int, error) {
 	sockets, err := newSocketPair()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	logrus.Debugf("Creating socket pair: %d %d", sockets[0], sockets[1])
 	defer cleanupSocketPair(sockets)
 
 	pid, err := spawnChild(r, sockets[1])
 	if err != nil {
-		return err
+		return 0, err
 	}
 	logrus.Debugf("Spawning container with PID %d", pid)
-	defer cleanupFilesys(r.uuid)
-
 	recv := make([]byte, 1)
 	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
 	if err != nil {
-		return err
+		return 0, err
+	}
+	if recv[0] == filesysMountFail {
+		logrus.Debugf("Mounting filesystem in child failed")
+	} else {
+		logrus.Debugf("Mounting filesystem in child successfully")
+		defer cleanupFilesys(r.uuid)
+	}
+
+	control, err := setupCgroup(r.hostname, pid)
+	if err != nil {
+		return 0, err
+	}
+	logrus.Debugf("Setting up cgroup: %s", control)
+	defer cleanupCgroup(control)
+
+	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
+	if err != nil {
+		return 0, err
 	}
 	if recv[0] == namespaceSetupFail {
 		logrus.Debugf("Unsharing user namespace from child failed")
@@ -88,21 +104,20 @@ func (r *Runtime) Run() error {
 		logrus.Debugf("Unsharing user namespace from child successfully")
 		err = mapNamespace(pid)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 	err = syscall.Sendto(sockets[0], []byte{0x0}, 0, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	stat, err := waitChild(pid)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	logrus.Infof("Container exited with status %d", stat)
 
-	return nil
+	return stat, nil
 }
 
 // String returns a string representation of the container.

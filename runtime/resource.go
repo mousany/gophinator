@@ -5,18 +5,22 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/containerd/cgroups/v3/cgroup1"
 	"github.com/google/uuid"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	seccomp "github.com/seccomp/libseccomp-golang"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	filesysPrefix  = "/tmp/gophinator."
-	filesysOldRoot = "/oldroot."
+	filesysPrefix       = "/tmp/gophinator."
+	filesysOldRoot      = "/oldroot."
+	filesysMountFail    = 0x0
+	filesysMountSuccess = 0x1
 )
 
 // mountFilesys mounts the filesystem.
-func mountFilesys(rootUUID string, volume string) error {
+func mountFilesys(fd int, rootUUID string, volume string) error {
 	root := filesysPrefix + rootUUID
 	err := os.MkdirAll(root, 0755)
 	if err != nil {
@@ -58,6 +62,10 @@ func mountFilesys(rootUUID string, volume string) error {
 	}
 	logrus.Debugf("Unmounting old root")
 
+	err = syscall.Sendto(fd, []byte{filesysMountSuccess}, 0, nil)
+	if err != nil {
+		return err
+	}
 	logrus.Infof("Mount %s => %s => /", volume, root)
 
 	return nil
@@ -212,4 +220,58 @@ func setupSyscall() error {
 
 	err = filter.Load()
 	return err
+}
+
+// setupCgroup sets up the cgroup.
+func setupCgroup(hostname string, pid uintptr) (cgroup1.Cgroup, error) {
+	var (
+		cgroupRLimit       uint64 = 64
+		cgroupCPUShare     uint64 = 256
+		cgroupMemoryLimit  int64  = 1024 * 1024 * 1024
+		cgroupMemoryKernel int64  = 1024 * 1024 * 1024
+		cgroupPidLimit     int64  = 64
+		cgroupBlkIOWeight  uint16 = 50
+	)
+
+	err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{
+		Cur: cgroupRLimit,
+		Max: cgroupRLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	control, err := cgroup1.New(cgroup1.StaticPath(hostname), &specs.LinuxResources{
+		CPU: &specs.LinuxCPU{
+			Shares: &cgroupCPUShare,
+		},
+		Memory: &specs.LinuxMemory{
+			Limit:  &cgroupMemoryLimit,
+			Kernel: &cgroupMemoryKernel,
+		},
+		Pids: &specs.LinuxPids{
+			Limit: cgroupPidLimit,
+		},
+		BlockIO: &specs.LinuxBlockIO{
+			Weight: &cgroupBlkIOWeight,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = control.Add(cgroup1.Process{
+		Pid: int(pid),
+	})
+	if err != nil {
+		control.Delete()
+		return nil, err
+	}
+
+	return control, nil
+}
+
+// cleanupCgroup cleans up the cgroup.
+func cleanupCgroup(control cgroup1.Cgroup) {
+	control.Delete()
 }
