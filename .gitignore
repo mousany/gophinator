@@ -22,3 +22,6 @@ go.work
 
 # Editor directories and files
 /.vscode/
+
+# Binaries
+/mount/bin/

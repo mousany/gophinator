@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mousany/gophinator/runtime"
 	"github.com/sirupsen/logrus"
@@ -39,6 +40,11 @@ func main() {
 						Aliases: []string{"r"},
 						Usage:   "mount the root of the container at the given `ROOT`",
 					},
+					&cli.StringSliceFlag{
+						Name:    "volume",
+						Aliases: []string{"v"},
+						Usage:   "mount the given `VOLUME`s into the container",
+					},
 				},
 				Action: func(c *cli.Context) error {
 					if c.Bool("debug") {
@@ -60,7 +66,20 @@ func main() {
 						args = append(args, c.Args().Get(i))
 					}
 
-					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("root"))
+					volumes := []runtime.VolumePair{}
+					for _, v := range c.StringSlice("volume") {
+						chunks := strings.Split(v, ":")
+						if len(chunks) != 2 {
+							fmt.Fprintf(os.Stderr, "Incorrect Usage: volume must be in the form 'source:target': %s", v)
+							fmt.Fprintln(os.Stderr)
+							cli.ShowSubcommandHelpAndExit(c, 1)
+						}
+						source := chunks[0]
+						target := strings.TrimPrefix(chunks[1], "/")
+						volumes = append(volumes, runtime.VolumePair{Source: source, Target: target})
+					}
+
+					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("root"), volumes)
 					if err != nil {
 						logrus.Errorf("Fail to create container: %s", err)
 						return err

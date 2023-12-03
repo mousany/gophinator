@@ -19,10 +19,16 @@ type Runtime struct {
 	root     string
 	hostname string
 	uuid     string
+	volumes  []VolumePair
+}
+
+type VolumePair struct {
+	Source string
+	Target string
 }
 
 // New creates a new container with the given command and arguments.
-func New(command string, args []string, uid int, root string) (*Runtime, error) {
+func New(command string, args []string, uid int, root string, volumes []VolumePair) (*Runtime, error) {
 	u, err := uname.New()
 	if err != nil {
 		return nil, err
@@ -58,6 +64,7 @@ func New(command string, args []string, uid int, root string) (*Runtime, error) 
 		root:     root,
 		hostname: hostname,
 		uuid:     uuid,
+		volumes:  volumes,
 	}, nil
 }
 
@@ -87,12 +94,12 @@ func (r *Runtime) Run() (int, error) {
 		defer cleanupFilesys(r.uuid)
 	}
 
-	// control, err := setupCgroup(r.hostname, pid)
-	// if err != nil {
-	// 	return 0, err
-	// }
-	// logrus.Debugf("Setting up cgroup: %s", control)
-	// defer cleanupCgroup(control)
+	control, err := setupCgroup(r.hostname, pid)
+	if err != nil {
+		return 0, err
+	}
+	logrus.Debugf("Setting up cgroup: %s", control)
+	defer cleanupCgroup(control)
 
 	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
 	if err != nil {

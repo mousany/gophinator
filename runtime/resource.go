@@ -20,19 +20,33 @@ const (
 )
 
 // mountFilesys mounts the filesystem.
-func mountFilesys(fd int, rootUUID string, rootPath string) error {
-	root := filesysPrefix + rootUUID
+func mountFilesys(rt *Runtime, fd int) error {
+	root := filesysPrefix + rt.uuid
 	err := os.MkdirAll(root, 0755)
 	if err != nil {
 		return err
 	}
 	logrus.Debugf("Creating root directory %s", root)
 
-	err = syscall.Mount(rootPath, root, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
+	err = syscall.Mount(rt.root, root, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Mounting root %s to %s", rootPath, root)
+	logrus.Debugf("Mounting root %s to %s", rt.root, root)
+
+	for _, volume := range rt.volumes {
+		source := volume.Source
+		target := root + "/" + volume.Target
+		err = os.MkdirAll(target, 0755)
+		if err != nil {
+			return err
+		}
+		err = syscall.Mount(source, target, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
+		if err != nil {
+			return err
+		}
+		logrus.Debugf("Mounting volume %s to %s", source, target)
+	}
 
 	uid := uuid.NewString()
 	oldRoot := root + filesysOldRoot + uid
@@ -66,7 +80,10 @@ func mountFilesys(fd int, rootUUID string, rootPath string) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Mount %s => %s => /", rootPath, root)
+	logrus.Infof("Mount %s => %s => /", rt.root, root)
+	for _, volume := range rt.volumes {
+		logrus.Infof("Mount %s => %s => %s", volume.Source, root+"/"+volume.Target, volume.Target)
+	}
 
 	return nil
 }
