@@ -20,7 +20,7 @@ const (
 )
 
 // mountFilesys mounts the filesystem.
-func mountFilesys(fd int, rootUUID string, volume string) error {
+func mountFilesys(fd int, rootUUID string, rootPath string) error {
 	root := filesysPrefix + rootUUID
 	err := os.MkdirAll(root, 0755)
 	if err != nil {
@@ -28,11 +28,11 @@ func mountFilesys(fd int, rootUUID string, volume string) error {
 	}
 	logrus.Debugf("Creating root directory %s", root)
 
-	err = syscall.Mount(volume, root, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
+	err = syscall.Mount(rootPath, root, "", uintptr(syscall.MS_BIND|syscall.MS_PRIVATE), "")
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Mounting volume %s to %s", volume, root)
+	logrus.Debugf("Mounting root %s to %s", rootPath, root)
 
 	uid := uuid.NewString()
 	oldRoot := root + filesysOldRoot + uid
@@ -66,7 +66,7 @@ func mountFilesys(fd int, rootUUID string, volume string) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Mount %s => %s => /", volume, root)
+	logrus.Infof("Mount %s => %s => /", rootPath, root)
 
 	return nil
 }

@@ -36,7 +36,7 @@ func childDaemon(r *Runtime, fd int) int {
 		logrus.Errorf("Fail to set hostname: %s", err)
 		return -1
 	}
-	err = mountFilesys(fd, r.uuid, r.volume)
+	err = mountFilesys(fd, r.uuid, r.root)
 	if err != nil {
 		logrus.Errorf("Fail to mount filesystem: %s", err)
 		return -1

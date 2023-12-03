@@ -35,9 +35,9 @@ func main() {
 						Usage:   "create the container with the specified `UID`",
 					},
 					&cli.StringFlag{
-						Name:    "volume",
-						Aliases: []string{"v"},
-						Usage:   "mount the root of the container at the given `VOLUME`",
+						Name:    "root",
+						Aliases: []string{"r"},
+						Usage:   "mount the root of the container at the given `ROOT`",
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -60,7 +60,7 @@ func main() {
 						args = append(args, c.Args().Get(i))
 					}
 
-					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("volume"))
+					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("root"))
 					if err != nil {
 						logrus.Errorf("Fail to create container: %s", err)
 						return err

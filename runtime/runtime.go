@@ -16,13 +16,13 @@ type Runtime struct {
 	command  string
 	args     []string
 	uid      int
-	volume   string
+	root     string
 	hostname string
 	uuid     string
 }
 
 // New creates a new container with the given command and arguments.
-func New(command string, args []string, uid int, volume string) (*Runtime, error) {
+func New(command string, args []string, uid int, root string) (*Runtime, error) {
 	u, err := uname.New()
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func New(command string, args []string, uid int, volume string) (*Runtime, error
 		command:  command,
 		args:     args,
 		uid:      uid,
-		volume:   volume,
+		root:     root,
 		hostname: hostname,
 		uuid:     uuid,
 	}, nil
