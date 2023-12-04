@@ -10,6 +10,42 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+func newRuntime(c *cli.Context) (*runtime.Runtime, error) {
+	if c.Bool("debug") {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
+	if c.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "Incorrect Usage: command needs an argument: run")
+		fmt.Fprintln(os.Stderr)
+		cli.ShowSubcommandHelpAndExit(c, 1)
+	}
+	if c.Args().Len() > 1 && c.Args().Get(1) != "--" {
+		fmt.Fprintf(os.Stderr, "Incorrect Usage: arguments must be preceded by '--': %s", c.Args().Get(1))
+		fmt.Fprintln(os.Stderr)
+		cli.ShowSubcommandHelpAndExit(c, 1)
+	}
+	args := []string{}
+	for i := 2; i < c.Args().Len(); i++ {
+		args = append(args, c.Args().Get(i))
+	}
+
+	volumes := []runtime.VolumePair{}
+	for _, v := range c.StringSlice("volume") {
+		chunks := strings.Split(v, ":")
+		if len(chunks) != 2 {
+			fmt.Fprintf(os.Stderr, "Incorrect Usage: volume must be in the form 'source:target': %s", v)
+			fmt.Fprintln(os.Stderr)
+			cli.ShowSubcommandHelpAndExit(c, 1)
+		}
+		source := chunks[0]
+		target := strings.TrimPrefix(chunks[1], "/")
+		volumes = append(volumes, runtime.VolumePair{Source: source, Target: target})
+	}
+
+	return runtime.New(c.Args().First(), args, c.Int("uid"), c.String("root"), volumes)
+}
+
 func main() {
 	app := &cli.App{
 		Name:    "gophinator",
@@ -27,7 +63,7 @@ func main() {
 			{
 				Name:      "run",
 				Aliases:   []string{"r"},
-				Usage:     "run a command in a new container",
+				Usage:     "run an executable in a new container",
 				ArgsUsage: `COMMAND [-- ARGUMENTS]`,
 				Flags: []cli.Flag{
 					&cli.IntFlag{
@@ -47,42 +83,49 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					if c.Bool("debug") {
-						logrus.SetLevel(logrus.DebugLevel)
-					}
-
-					if c.NArg() < 1 {
-						fmt.Fprintln(os.Stderr, "Incorrect Usage: command needs an argument: run")
-						fmt.Fprintln(os.Stderr)
-						cli.ShowSubcommandHelpAndExit(c, 1)
-					}
-					if c.Args().Len() > 1 && c.Args().Get(1) != "--" {
-						fmt.Fprintf(os.Stderr, "Incorrect Usage: arguments must be preceded by '--': %s", c.Args().Get(1))
-						fmt.Fprintln(os.Stderr)
-						cli.ShowSubcommandHelpAndExit(c, 1)
-					}
-					args := []string{}
-					for i := 2; i < c.Args().Len(); i++ {
-						args = append(args, c.Args().Get(i))
-					}
-
-					volumes := []runtime.VolumePair{}
-					for _, v := range c.StringSlice("volume") {
-						chunks := strings.Split(v, ":")
-						if len(chunks) != 2 {
-							fmt.Fprintf(os.Stderr, "Incorrect Usage: volume must be in the form 'source:target': %s", v)
-							fmt.Fprintln(os.Stderr)
-							cli.ShowSubcommandHelpAndExit(c, 1)
-						}
-						source := chunks[0]
-						target := strings.TrimPrefix(chunks[1], "/")
-						volumes = append(volumes, runtime.VolumePair{Source: source, Target: target})
-					}
-
-					con, err := runtime.New(c.Args().First(), args, c.Int("uid"), c.String("root"), volumes)
+					con, err := newRuntime(c)
 					if err != nil {
 						logrus.Errorf("Fail to create container: %s", err)
-						return err
+						os.Exit(1)
+					}
+
+					stat, err := con.Run()
+					if err != nil {
+						logrus.Errorf("Fail to run container: %s", err)
+					} else {
+						logrus.Infof("Container exited with status %d", stat)
+					}
+
+					return err
+				},
+			},
+			{
+				Name:      "exec",
+				Aliases:   []string{"e"},
+				Usage:     "run an executable in a new container and attach to its stdin, stdout, and stderr",
+				ArgsUsage: `COMMAND [-- ARGUMENTS]`,
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:    "uid",
+						Aliases: []string{"u"},
+						Usage:   "create the container with the specified `UID`",
+					},
+					&cli.StringFlag{
+						Name:    "root",
+						Aliases: []string{"r"},
+						Usage:   "mount the root of the container at the given `ROOT`",
+					},
+					&cli.StringSliceFlag{
+						Name:    "volume",
+						Aliases: []string{"v"},
+						Usage:   "mount the given `VOLUME`s into the container",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					con, err := newRuntime(c)
+					if err != nil {
+						logrus.Errorf("Fail to create container: %s", err)
+						os.Exit(1)
 					}
 
 					stat, err := con.Run()

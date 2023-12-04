@@ -31,11 +31,13 @@ func cleanupSocketPair(sockets [2]int) {
 // childDaemon is the main loop for the container.
 func childDaemon(r *Runtime, fd int) int {
 	logrus.Infof("Starting container with command: %s %s", r.command, strings.Join(r.args, " "))
+
 	err := syscall.Sethostname([]byte(r.hostname))
 	if err != nil {
 		logrus.Errorf("Fail to set hostname: %s", err)
 		return -1
 	}
+
 	err = mountFilesys(r, fd)
 	if err != nil {
 		logrus.Errorf("Fail to mount filesystem: %s", err)
@@ -51,6 +53,7 @@ func childDaemon(r *Runtime, fd int) int {
 	if err != nil {
 		logrus.Errorf("Fail to close socket: %d", fd)
 	}
+
 	err = switchNamespace(r.uid)
 	if err != nil {
 		logrus.Errorf("Fail to switch namespaces: %s", err)

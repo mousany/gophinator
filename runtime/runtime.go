@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -94,12 +96,13 @@ func (r *Runtime) Run() (int, error) {
 		defer cleanupFilesys(r.uuid)
 	}
 
-	control, err := setupCgroup(r.hostname, pid)
-	if err != nil {
-		return 0, err
-	}
-	logrus.Debugf("Setting up cgroup: %s", control)
-	defer cleanupCgroup(control)
+	// * Setup cgroup may not working in some platform
+	// control, err := setupCgroup(r.hostname, pid)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// logrus.Debugf("Setting up cgroup: %s", control)
+	// defer cleanupCgroup(control)
 
 	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
 	if err != nil {
@@ -117,6 +120,84 @@ func (r *Runtime) Run() (int, error) {
 	err = syscall.Sendto(sockets[0], []byte{0x0}, 0, nil)
 	if err != nil {
 		return 0, err
+	}
+
+	stat, err := waitChild(pid)
+	if err != nil {
+		return 0, err
+	}
+
+	return stat, nil
+}
+
+// Exec executes the container's command with the given arguments and forwards
+// the standard input, output and error streams.
+func (r *Runtime) Exec() (int, error) {
+	sockets, err := newSocketPair()
+	if err != nil {
+		return 0, err
+	}
+	logrus.Debugf("Creating socket pair: %d %d", sockets[0], sockets[1])
+	defer cleanupSocketPair(sockets)
+
+	pid, err := spawnChild(r, sockets[1])
+	if err != nil {
+		return 0, err
+	}
+	logrus.Debugf("Spawning container with PID %d", pid)
+	recv := make([]byte, 1)
+	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
+	if err != nil {
+		return 0, err
+	}
+	if recv[0] == filesysMountFail {
+		logrus.Debugf("Mounting filesystem in child failed")
+	} else {
+		logrus.Debugf("Mounting filesystem in child successfully")
+		defer cleanupFilesys(r.uuid)
+	}
+
+	// * Setup cgroup may not working in some platform
+	// control, err := setupCgroup(r.hostname, pid)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// logrus.Debugf("Setting up cgroup: %s", control)
+	// defer cleanupCgroup(control)
+
+	_, _, err = syscall.Recvfrom(sockets[0], recv, 0)
+	if err != nil {
+		return 0, err
+	}
+	if recv[0] == namespaceSetupFail {
+		logrus.Debugf("Unsharing user namespace from child failed")
+	} else {
+		logrus.Debugf("Unsharing user namespace from child successfully")
+		err = mapNamespace(pid)
+		if err != nil {
+			return 0, err
+		}
+	}
+	err = syscall.Sendto(sockets[0], []byte{0x0}, 0, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	stdin, err := os.Create("/proc/" + strconv.Itoa(int(pid)) + "/fd/0")
+	if err != nil {
+		return 0, err
+	}
+	defer stdin.Close()
+	for {
+		buf := []byte{}
+		_, err := os.Stdin.Read(buf)
+		if err != nil {
+			break
+		}
+		_, err = stdin.Write(buf)
+		if err != nil {
+			break
+		}
 	}
 
 	stat, err := waitChild(pid)
